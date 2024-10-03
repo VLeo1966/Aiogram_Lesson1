@@ -17,6 +17,13 @@ dp = Dispatcher()
 # Включаем логирование
 logging.basicConfig(level=logging.INFO)
 
+# Определение состояний для перевода и создания голосового сообщения
+class TranslateState(StatesGroup):
+    waiting_for_text = State()
+
+class VoiceState(StatesGroup):
+    waiting_for_text = State()
+
 # Определение состояний для обработки текста и создания голосового сообщения
 class VoiceState(StatesGroup):
     waiting_for_text = State()
@@ -42,22 +49,18 @@ async def save_photo(message: Message):
     await bot.download(photo, destination=file_path)
     await message.answer(f"Фото сохранено в {file_path}")
 
+
+
 # Команда для начала перевода текста на английский
 @dp.message(Command('translate'))
-async def text(message: Message):
+async def text(message: Message, state: FSMContext):
     await bot.send_chat_action(message.chat.id, "typing")
     await message.answer('Введите текст, который хотите перевести на английский:')
-
+    await state.set_state(TranslateState.waiting_for_text)  # Устанавливаем состояние ожидания текста для перевода
 
 # Перевод текста пользователя на английский язык
-@dp.message(F.text)
+@dp.message(TranslateState.waiting_for_text)
 async def translate_text(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-
-    # Проверяем, находится ли бот в состоянии ожидания текста для команды /voice
-    if current_state == VoiceState.waiting_for_text.state:
-        return  # Пропускаем обработку текста, если ожидаем текст для голосового сообщения
-
     translator = Translator()
     text_msg = message.text  # Получаем текст сообщения
     await bot.send_chat_action(message.chat.id, "typing")  # Указываем "typing" для процесса перевода
@@ -71,12 +74,14 @@ async def translate_text(message: Message, state: FSMContext):
         logging.error(f"Ошибка при переводе: {e}")
         await message.answer("Произошла ошибка при переводе текста.")
 
+    await state.clear()  # Сбрасываем состояние после перевода
+
 # Команда для создания голосового сообщения
 @dp.message(Command('voice'))
 async def voice(message: Message, state: FSMContext):
     await bot.send_chat_action(message.chat.id, "record_voice")
     await message.answer('Введите текст, который хотите преобразовать в голосовое сообщение')
-    await state.set_state(VoiceState.waiting_for_text)  # Устанавливаем состояние ожидания текста
+    await state.set_state(VoiceState.waiting_for_text)  # Устанавливаем состояние ожидания текста для голосового сообщения
 
 # Обработка текста для создания голосового сообщения
 @dp.message(VoiceState.waiting_for_text)
@@ -97,6 +102,12 @@ async def send_voice(message: Message, state: FSMContext):
     # Удаление временного файла и сброс состояния
     os.remove("voice/voice_message.ogg")
     await state.clear()
+
+# Если текст поступает без активного состояния, например, команды /voice или /translate
+@dp.message(F.text)
+async def fallback_text_handler(message: Message):
+    await message.answer("Для начала используйте команду /translate для перевода текста или /voice для создания голосового сообщения.")
+
 
 async def main():
     await dp.start_polling(bot)
