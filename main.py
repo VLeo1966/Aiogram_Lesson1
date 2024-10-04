@@ -1,3 +1,5 @@
+import logging
+
 import requests
 import asyncio
 from aiogram import Bot, Dispatcher, F
@@ -5,6 +7,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, FSInputFile
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
+import sys
 
 from config import TOKEN, TOKEN2
 
@@ -12,8 +15,23 @@ import random
 from gtts import gTTS
 import os
 
+import keyboards as kb
+
+logging.basicConfig(level=logging.DEBUG)
+
+# Проверяем, если бот уже запущен
+if not sys.argv[1:]:
+    logging.error("Кажется, бот уже запущен. Завершите другие экземпляры!")
+    exit(1)
+
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+
+@dp.message(CommandStart())
+async def start(message: Message):
+    await message.answer(f'Приветики, {message.from_user.first_name}', reply_markup=await kb.test_keyboard())
 
 @dp.message(Command('video'))
 async def video(message: Message):
@@ -36,8 +54,6 @@ async def audio(message: Message):
     await bot.send_chat_action(message.chat.id, "upload_audio")
     audio = FSInputFile('audio.mp3')
     await bot.send_audio(message.chat.id, audio)
-
-
 
 
 @dp.message(Command('training'))
@@ -80,9 +96,7 @@ async def aitext(message: Message):
 async def help(message: Message):
     await message.answer("Этот бот умеет выполнять команды: \n /start \n /help \n /weather Москва")
 
-@dp.message(CommandStart())
-async def start(message: Message):
-    await message.answer(f'Приветики, {message.from_user.first_name}')
+
 
 # Определение состояний
 class WeatherState(StatesGroup):
